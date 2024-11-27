@@ -6,6 +6,8 @@ This is a custom shell developed in C that includes features like command histor
 
 - **Command History**: Tracks previously entered commands and allows navigation through them using the up and down arrow keys.
 - **Command Autocomplete**: Offers suggestions for commands based on a prefix when the user presses the `Tab` key.
+- **Pipeline**: Allows piping the output of one command to the input of another command using the `|` symbol.
+- **System Memory Usage**: Displays the total and used physical memory when the `sysusage` command is executed.
 - **System Memory Usage**: Displays the total and used physical memory when the `sysusage` command is executed.
 - **Basic Shell Commands**: Supports basic commands like `cd`, `pwd`, `ls`, `exit`, and more.
 - **Raw Mode Input**: Captures and processes user input in raw mode to handle backspace, autocomplete, and arrow keys.
@@ -79,4 +81,7 @@ username@system_name$ exit
 
 - Autocomplete feature is implemented using **Trie** data structure for faster searching of command prefix (also to brush up my DSA classes). It still needs some refining to be done as it may not work as intended. More features are yet to be added like CPU Usage, process commands, etc.
 
+### Known Issues
+
+- Implementation of Trie together with linked list related functions screwed up the history traversal, so it is not working as intended, several hours and brain cells ahead to lose to fix it (I truely have no idea what is going on :)). 
 

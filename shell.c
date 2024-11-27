@@ -9,6 +9,7 @@
 #include <sys/utsname.h>
 #include <sys/sysinfo.h>
 #include <termios.h>
+#include <fcntl.h>
 
 #define ALPHABET_SIZE 26
 #define MAX_INPUT 1024
@@ -171,19 +172,139 @@ void sysusage() {
     printf("Used Physical Memory: %.2f MB\n", usedPhysMem / (1024.0 * 1024.0));
 }
 
+void change_directory(char **args) {
+    if(args[1] == NULL) {
+        printf("No directory provided.\n");
+    }
+    if (chdir(args[1])!= 0) {
+        perror("Failed to change directory");
+    }
+    return;
+}
+
+void handle_redirection(char **args, char *file) {
+    int fd = 0;
+    if(file) {
+        fd = open(file, O_WRONLY | O_CREAT);
+        if(fd < 0) {
+            perror("Failed to open file for redirection");
+            return;
+        } else {
+            int saved_stdout = dup(STDOUT_FILENO);
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+
+            // run the process
+            pid_t pid = fork();
+            if(pid < 0) {
+                perror("Failed to fork.");
+                exit(EXIT_FAILURE);
+            } else if(pid == 0) {
+                execvp(args[0], args);
+                perror("Failed to execute command");
+                exit(EXIT_FAILURE);
+            } else {
+                wait(NULL);
+            }
+
+            // restore stdout  
+            dup2(saved_stdout, STDOUT_FILENO);
+            close(saved_stdout);
+        }
+    } else {
+        printf("No file provided for redirection.\n");
+        return;
+    }
+}
+
+void handle_pipeline(char **command1, char **command2) {
+    int pipefd[2];
+    pid_t pid1, pid2;
+
+    if (pipe(pipefd) == -1) {
+        perror("Failed to create pipe");
+        exit(EXIT_FAILURE);
+    }
+    // pipefd[0] is the read end and the pipefd[1] is the write end
+
+    pid1 = fork();
+    if (pid1 == 0) {
+        // In the first child process, execute the first command
+        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to the pipe
+        close(pipefd[0]); 
+        execvp(command1[0], command1); 
+        perror("Failed to execute command");
+        exit(EXIT_FAILURE);
+    }
+
+    pid2 = fork();
+    if (pid2 == 0) {
+        // In the second child process, execute the second command
+        dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to the pipe
+        close(pipefd[1]);  
+        execvp(command2[0], command2); 
+        perror("Failed to execute command");
+        exit(EXIT_FAILURE);
+    }
+
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    wait(NULL);
+    wait(NULL);
+}
+
+
 // Execute shell commands
 void exec_command(char *input) {
+    bool redirection = false;
+    bool pipeline = false;
+    char* file = NULL;
     char *args[MAX_ARGUMENTS];
+    char *command1[MAX_ARGUMENTS];
+    char *command2[MAX_ARGUMENTS];
     int arg_count = 0;
+    int command_two_idx = 0;
     char *token = strtok(input, " ");
+    
     while (token != NULL) {
+        if (*token == '|') {
+            // Pipeline detected, split the commands
+            pipeline = true;
+            command1[arg_count] = NULL;
+            // Store the left part of the pipeline
+            token = strtok(NULL, " ");
+            break;
+        }
+
+        if (*token == '>') {
+            // Handle redirection
+            redirection = true;
+            file = strtok(NULL, " ");
+            break;
+        }
+        command1[arg_count] = token;
         args[arg_count++] = token;
         token = strtok(NULL, " ");
     }
     args[arg_count] = NULL;
-
-    if (arg_count == 0) return;
-
+    if (pipeline) {
+        int i = 0;
+        while (token != NULL) {
+            command2[i++] = token;
+            token = strtok(NULL, " ");
+        }
+        command2[i] = NULL;
+        handle_pipeline(command1, command2);
+        return; 
+    }
+    // check for redirection
+    if(redirection) {
+        printf("Redirection detected.\n");
+        handle_redirection(args, file);
+        redirection = false;
+        return;
+    }
     if (strcmp(args[0], "whatisthis") == 0) {
         printf("This is a custom shell developed in C due to the fact that the developer was bored.\n");
         return;
@@ -197,16 +318,9 @@ void exec_command(char *input) {
         return;
     }
     if (strcmp(args[0], "cd") == 0) {
-        if (args[1] == NULL) {
-            printf("No directory provided.\n");
-        } else {
-            if (chdir(args[1]) != 0) {
-                perror("Failed to change directory");
-            }
-        }
+        change_directory(args);
         return;
     }
-
     // Fork a child process to execute the command
     pid_t pid = fork();
     if (pid < 0) {
