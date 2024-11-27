@@ -42,13 +42,15 @@ typedef struct TrieNode {
 
 //globals
 Node *current = NULL;
-Node *history_head = NULL;
+Node *history_head;
 TrieNode* autocomplete_head = NULL;
 struct termios orig_termios;
 struct sysinfo memInfo;
 struct utsname unameData;
 char* common_commands[] = {
-	"cd", "pwd", "ls", "history", "exit", "clear", "echo", "help", "uname", "top", "whoami", "whatisthis", NULL
+	"cd", "pwd", "ls", "exit", "clear", "echo", "help", "uname", "top", "whoami", "whatisthis", 
+    "kill", "service", "gcc",
+    NULL
 };
 
 TrieNode* createNode() {
@@ -68,52 +70,47 @@ void insert_into_trie(const char* command) {
 	if(!autocomplete_head) {
 		autocomplete_head = createNode();
 	}
-	TrieNode* current = autocomplete_head;
+	TrieNode* temp = autocomplete_head;
 	while(*command) {
 		int index = tolower(*command) - 'a';
-		if (!current->children[index]) {
-            current->children[index] = createNode();
+		if (!temp->children[index]) {
+            temp->children[index] = createNode();
         }
-		current = current->children[index];
+		temp = temp->children[index];
 		command++;
 	}
-	current->is_end = true;
+	temp->is_end = true;
 }
 
-void collect__words(TrieNode* node, char* prefix, char** result, int* index) {
-	if(node->is_end) {
-		strcpy(result[*index], prefix);
-        (*index)++;
-	}
-	else {
-		for(int i = 0; i < ALPHABET_SIZE; i++) {
-            if(node->children[i]) {
-				int length = strlen(prefix);
-                prefix[length] = 'a' + i;
-				prefix[length+1] = '\0';
-                collect__words(node->children[i], prefix, result, index);
-                prefix[length] = '\0';
-            }
+
+void collect_words(TrieNode* node, char* prefix, int length) {
+    if(node->is_end) {
+        prefix[length] = '\0';
+        printf("%s\n", prefix);
+    }
+    for(int i = 0; i < ALPHABET_SIZE; i++) {
+        if(node->children[i]) {
+            prefix[length] = 'a' + i;
+            collect_words(node->children[i], prefix, length+1);
         }
-	}
+    }
 }
 
-bool search_prefix(char* prefix, char** result, int *result_index) {
-	TrieNode* current = autocomplete_head;
+void search_prefix(char* prefix) {
+    char* temp_string = strdup(prefix);
+    if(!autocomplete_head) return;
+    TrieNode* temp = autocomplete_head;
+    int prefix_length = 0;
     while(*prefix) {
         int index = tolower(*prefix) - 'a';
-        if (!current->children[index]) {
-			return false;
+        if(index < 0 || index >= ALPHABET_SIZE || !temp->children[index]) {
+            return;
         }
-        current = current->children[index];
+        temp = temp->children[index];
         prefix++;
+        prefix_length++;
     }
-	for(int i = 0; i < ALPHABET_SIZE; i++) {
-		if(current->children[i]) {
-			collect__words(current->children[i], prefix, result, result_index);
-		}
-	}
-	return true;
+    collect_words(temp, temp_string, prefix_length);
 }
 
 
@@ -309,6 +306,10 @@ void exec_command(char *input) {
         printf("This is a custom shell developed in C due to the fact that the developer was bored.\n");
         return;
     }
+    if (strcmp(args[0], "help") == 0) {
+        printf("Refer to https://github.com/SreehariSanjeev04/custom_shell for the commands. Use 'man' for more information regarding a command. \n");
+        return;
+    }
     if (strcmp(args[0], "exit") == 0) {
         printf("Exiting shell.\n");
         exit(EXIT_SUCCESS);
@@ -340,7 +341,7 @@ void exec_command(char *input) {
 void readInput(char *buffer) {
     int index = 0;
     char c;
-
+    current = history_head;
     while (1) {
         c = getchar();
         if (c == '\n') {
@@ -353,22 +354,13 @@ void readInput(char *buffer) {
                 index--;
             }
         } else if(c == '\t') {
-			int result_index = 0;
-			char* autocomplete_result[ALPHABET_SIZE];
-			if(search_prefix(buffer, autocomplete_result, &result_index)) {
-				if (result_index > 0) {
-					strcpy(buffer, autocomplete_result[0]); 
-					index = strlen(buffer);  
-					printf("\r\033[K");
-					prompt();
-					printf("%s", buffer);
-				}
-			} 
-			buffer[index] = '\0';
+            buffer[index] = '\0';
+            printf("\nSuggestions: \n"); 
+            search_prefix(buffer);    
 			printf("\r\033[K");
-			prompt();
+            prompt();
 			printf("%s", buffer);
-		} 
+		}  
 		else if (c == '\033') {  
             getchar();  
             switch (getchar()) {
@@ -430,7 +422,7 @@ int main() {
     while (1) {
         prompt();
         readInput(input);
-        add_to_history(history_head, input);
+        history_head = add_to_history(history_head, input);
         exec_command(input);
     }
 
