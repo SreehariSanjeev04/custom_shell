@@ -1,6 +1,7 @@
 #include "shell.h"
 #include "task_scheduler.c"
 #include "focus_mode.c"
+#include "auto_delete.h"
 
 Node *current = NULL;
 Node *history_head;
@@ -12,7 +13,7 @@ Job jobs[MAX_JOBS];
 int job_count = 0;
 char *common_commands[] = {
     "cd", "pwd", "ls", "exit", "clear", "echo", "help", "uname", "top", "whoami", "whatisthis",
-    "kill", "service", "gcc", "bg", "fg",
+    "kill", "service", "gcc", "bg", "fg", "schedule", "focusmode",
     NULL};
 /*
 typedef struct {
@@ -340,41 +341,31 @@ void handle_jobs(char **args, int arg_count)
     pid_t pid = fork();
 }
 
-void cleanup_old(char **args, int arg_count)
-{
-    if (arg_count < 4)
-    {
-        fprintf(stderr, "Failed to run cleanup command: Require more arguements.\n");
+void handle_cleanup(char** args, int arg_count) {
+    if (arg_count < 4) {
+        fprintf(stderr, "Failed to run cleanup command: Requires more arguments.\n");
         return;
     }
-    int size_in_mb = atoi(args[3]);
-    char *path = strdup(args[1]);
-    char *flag = strdup(args[2]);
-    pid_t pid = fork();
-    if (pid < 0)
-    {
-        perror("Failed to fork.");
-        exit(EXIT_FAILURE);
+    char* flag = strdup(args[2]);
+    char* path = strdup(args[1]);
+    char* condition = strdup(args[3]);
+    char value_flag = condition[strlen(condition) - 1];
+    condition[strlen(condition) - 1] = '\0';
+    int value = atoi(condition);
+    char* full_path = realpath(path, NULL);
+    if(strcmp(flag, "-s")) {
+        printf("Deleting files from %s with size above %s...\n", full_path, condition);
+        check_file_and_delete_size(full_path, value, value_flag);
+    } else if(strcmp(flag, "-t")) {
+        printf("Deleting files from %s with creation time before %s...\n", full_path, condition);
+        check_file_and_delete_time(full_path, value, value_flag);
+
+    } else {
+        fprintf(stderr, "Invalid flag, use '-s' or '-t'.\n");
+        return;
     }
-    else if (pid == 0)
-    {
-        if (flag == "--size")
-        {
-            
-        }
-        else if (flag == "--old")
-        {
-            // Clean up old files based on size
-        }
-        else
-        {
-        }
-    }
-    else
-        wait(NULL);
 }
 void handle_task_scheduler(char **arguments, int arg_count) {
-    printf("Task Scheduler\n");
     if (arg_count < 3) {
         fprintf(stderr, "Failed to run task scheduler command: Requires more arguments.\n");
         return;
@@ -409,7 +400,6 @@ void handle_task_scheduler(char **arguments, int arg_count) {
             strcat(command, " ");
         }
     }
-    printf("%s %lld\n", command, (long long int)execution_time - time(NULL));
     add_task(command, execution_time);
 }
 
@@ -488,7 +478,6 @@ void exec_command(char *input)
     // check for redirection
     if (redirection)
     {
-        printf("Redirection detected.\n");
         handle_redirection(args, file);
         redirection = false;
         return;
@@ -560,7 +549,7 @@ void readInput(char *buffer)
             break;
         }
         else if (c == 127)
-        { // Backspace
+        { 
             if (index > 0)
             {
                 printf("\b \b");
@@ -616,7 +605,6 @@ void readInput(char *buffer)
     }
 }
 
-// Free history nodes
 void free_history(Node *head)
 {
     while (head)

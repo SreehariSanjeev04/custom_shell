@@ -8,7 +8,7 @@
 
 #define HOSTS_FILE "/etc/hosts"
 #define BACKUP_FILE "/etc/hosts.backup"
-#define BLOCKED_SITES 1
+#define BLOCKED_SITES 5
 
 void enable_focus_mode();
 

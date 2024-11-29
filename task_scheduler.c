@@ -63,31 +63,27 @@ void print_tasks() {
 void execute_task(Task task) {
     pid_t pid = fork();
     if (pid == 0) {
+        time_t current_time = time(NULL);
+        if (current_time < task.execution_time) {
+            sleep(task.execution_time - current_time);
+        }
         printf("Executing: %s\n", task.command);
         system(task.command);
-        return;
+        printf("Successfully executed: %s\n", task.command);
     }
 }
 
 void task_scheduler() {
-    while (task_size > 0) {
         Task task = pop();
-        time_t current_time = time(NULL);
-
-        if (current_time < task.execution_time) {
-            sleep(task.execution_time - current_time);
-        }
-
         execute_task(task);
     }
-}
+
 
 void add_task(char* command, time_t exec_time) {
     Task new_task;
     strncpy(new_task.command, command, MAX_COMMAND_SIZE);
     new_task.execution_time = exec_time;
     push(new_task);
-    printf("Task added successfully.\n");
     print_tasks();
     task_scheduler();
 }

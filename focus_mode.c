@@ -1,14 +1,18 @@
 #include "focus_mode.h"
 
 const char *BLOCKED_HOSTS[] = {
-    "x.com"
+    "x.com",
+    "youtube.com",
+    "facebook.com",
+    "snapshat.com",
+    "instagram.com",
 };
 
 void check_root() {
     uid_t euid = geteuid(); 
     if (euid != 0) {
         fprintf(stderr, "This script must be run as root\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 }
 
@@ -17,7 +21,7 @@ void copy_contents(const char* src, const char* dest) {
     FILE *dest_file = fopen(dest, "w");
     if (!src_file || !dest_file) {
         fprintf(stderr, "Couldn't open HOST OR BACKUP HOST file.\n");
-        exit(EXIT_FAILURE);
+        return;
     }
     char c;
     while ((c = fgetc(src_file)) != EOF) {
@@ -33,7 +37,7 @@ void enable_focus_mode() {
     FILE* hosts_file = fopen(HOSTS_FILE, "a");
     if (!hosts_file) {
         fprintf(stderr, "Failed to open hosts file\n");
-        exit(EXIT_FAILURE);
+        return;
     }
 
     copy_contents(HOSTS_FILE, BACKUP_FILE);
